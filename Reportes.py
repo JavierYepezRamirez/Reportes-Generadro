@@ -1,13 +1,43 @@
+import os
+import sys
+import shutil
+import datetime
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from tkcalendar import DateEntry
 from openpyxl import load_workbook
 from docx import Document
 from docx.shared import Inches
-import shutil, os
+
+# Configuración de la ventana principal y del icono
+root = tk.Tk()
+
+# Definir base_path para el icono y otros archivos según si está en modo PyInstaller o no
+if hasattr(sys, '_MEIPASS'):
+    base_path = sys._MEIPASS
+else:
+    base_path = os.path.abspath(".")
+
+icon_path = os.path.join(base_path, 'icono.ico')
+
+try:
+    root.iconbitmap(icon_path)
+except Exception as e:
+    print(f"No se pudo cargar el icono: {e}")
+
+# Función auxiliar para obtener rutas seguras (por PyInstaller)
+def get_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+
+# Rutas para archivos
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+excel_path = os.path.join(BASE_DIR, "NODOS.xlsx")
+reporte_origen = os.path.join(BASE_DIR, "REPORTE CINERIA.docx")
+reporte_destino = os.path.join(BASE_DIR, "temp_reporte.docx")  # Lo usas para copia temporal
 
 # Cargar datos desde Excel
-excel_path = r"C:\Users\javie\Desktop\Generador de reporte\NODOS.xlsx"
 wb = load_workbook(excel_path)
 ws = wb.active
 
@@ -18,18 +48,20 @@ for row in ws.iter_rows(min_row=2, values_only=True):
         "municipio": row[13],
         "direccion": row[17],
         "codigo_postal": row[18],
-        "nombre_sitio": row[2],
+        "nombre_sitio": row[3],
         "tipo_espacio": row[4],
         "entidad": row[6],
         "latitud": row[15],
         "longitud": row[14],
-        "id_nodo_prbd": row[1] if len(row) > 9 else ""
+        "clave_nodo": row[16],
+        "nomenclatura_redgto": row[2]
     })
 
 nombres_nodo = [c["nombre_nodo"] for c in clientes_data]
 imagenes = []
 
-# Función para subir fotos
+# Funciones
+
 def subir_fotos():
     archivos = filedialog.askopenfilenames(filetypes=[("Imágenes", "*.jpg *.jpeg *.png")])
     if archivos:
@@ -38,143 +70,197 @@ def subir_fotos():
         lbl_fotos.config(text=f"{len(imagenes)} foto(s) seleccionada(s)")
 
 def reemplazar_texto(doc, buscar, reemplazo):
+    reemplazo = str(reemplazo)
     for p in doc.paragraphs:
         if buscar in p.text:
             for run in p.runs:
-                if buscar in run.text:
+                if run.text and buscar in run.text:
                     run.text = run.text.replace(buscar, reemplazo)
-
     for tabla in doc.tables:
         for fila in tabla.rows:
             for celda in fila.cells:
                 for p in celda.paragraphs:
                     if buscar in p.text:
                         for run in p.runs:
-                            if buscar in run.text:
+                            if run.text and buscar in run.text:
                                 run.text = run.text.replace(buscar, reemplazo)
 
 def generar_reporte():
-    seleccionado = combo.get()
+    seleccionado = nodo_var.get()
     datos = next((c for c in clientes_data if c["nombre_nodo"] == seleccionado), None)
-
     if not datos:
         messagebox.showerror("Error", "Nodo no encontrado.")
         return
-
     try:
-        shutil.copy(r"C:\Users\javie\Desktop\Generador de reporte\REPORTE CINERIA.docx", "temp_reporte.docx")
+        shutil.copy(reporte_origen, reporte_destino)
     except FileNotFoundError:
         messagebox.showerror("Error", "No se encontró 'REPORTE CINERIA.docx'")
         return
 
-    doc = Document("temp_reporte.docx")
+    doc = Document(reporte_destino)
+    reemplazos = {
+        "cliente": "RED GUANAJUATO",
+        "municipio": datos['municipio'],
+        "direccion": datos['direccion'],
+        "codigo": datos['codigo_postal'],
+        "nombre": f"{datos['clave_nodo']} - {datos['nombre_sitio']}",
+        "tipo de espacio": datos['tipo_espacio'],
+        "entidad": entidad_var.get(),
+        "latitud": str(datos['latitud']),
+        "longitud": str(datos['longitud']),
+        "id": datos['nomenclatura_redgto'],
+        "emision": fecha_emision.get(),
+        "fecha de apertura": fecha_apertura.get(),
+        "llegada": fecha_llegada.get(),
+        "cierre": fecha_cierre.get(),
+        "Trabajador": trabajador_var.get(),
+        "Hora": hora_var.get(),
+        "Tecnico": tecnico_var.get(),
+        "Servicio1": servicio_var.get(),
+        "actividades": actividades_var.get(),
+        "Mantenimiento1": mantenimiento_var.get(),
+    }
 
-    # Reemplazo de textos
-    reemplazar_texto(doc, "cliente", "RED GUANAJUATO")
-    reemplazar_texto(doc, "municipio", f"{datos['municipio']}")
-    reemplazar_texto(doc, "direccion", f"{datos['direccion']}")
-    reemplazar_texto(doc, "codigo", f"{datos['codigo_postal']}")
-    reemplazar_texto(doc, "nombre del sitio", f"{datos['nombre_sitio']}")
-    reemplazar_texto(doc, "tipo de espacio", f"{datos['tipo_espacio']}")
-    reemplazar_texto(doc, "entidad", f"{datos['entidad']}")
-    reemplazar_texto(doc, "latitud", f"{str(datos['latitud'])}")
-    reemplazar_texto(doc, "longitud", f"{str(datos['longitud'])}")
-    reemplazar_texto(doc, "id", f"{datos['id_nodo_prbd']}")
-    reemplazar_texto(doc, "emision", f"{fecha_emision.get()}")
-    reemplazar_texto(doc, "fecha de apertura", f"{fecha_apertura.get()}")
-    reemplazar_texto(doc, "llegada", f"{fecha_llegada.get()}")
-    reemplazar_texto(doc, "cierre", f"{fecha_cierre.get()}")
-    reemplazar_texto(doc, "Trabajador", trabajador_var.get())
-    reemplazar_texto(doc, "Hora", hora_var.get())
-    reemplazar_texto(doc, "Tecnico", tecnico_var.get())
-    reemplazar_texto(doc, "Servicio", servicio_var.get())
-    reemplazar_texto(doc, "actividades", actividades_var.get())
-    reemplazar_texto(doc, "Mantenimiento", mantenimiento_var.get())
+    for buscar, reemplazo in reemplazos.items():
+        reemplazar_texto(doc, buscar, reemplazo)
 
     if imagenes:
-        doc.add_page_break()
-        doc.add_heading("EVIDENCIA FOTOGRÁFICA", level=1)
-        for img in imagenes:
-            doc.add_picture(img, width=Inches(4))
-            doc.add_paragraph("")
+        for tabla in doc.tables:
+            for fila in tabla.rows:
+                for celda in fila.cells:
+                    if "Subir fotos" in celda.text:
+                        for img_path in imagenes:
+                            try:
+                                p = celda.add_paragraph()
+                                r = p.add_run()
+                                r.add_picture(img_path, width=Inches(3))
+                            except Exception as e:
+                                messagebox.showerror("Error al insertar imagen", f"{img_path}\n{e}")
+                        break
 
     guardar_como = filedialog.asksaveasfilename(defaultextension=".docx", filetypes=[("Word Document", "*.docx")])
     if guardar_como:
         doc.save(guardar_como)
-        os.remove("temp_reporte.docx")
+        if os.path.exists(reporte_destino):
+            os.remove(reporte_destino)
         messagebox.showinfo("Éxito", f"Reporte guardado:\n{guardar_como}")
+        limpiar_campos()
 
-# Interfaz gráfica
-root = tk.Tk()
+def limpiar_campos():
+    hoy = datetime.date.today()
+    fecha_emision.set_date(hoy)
+    fecha_apertura.set_date(hoy)
+    fecha_llegada.set_date(hoy)
+    fecha_cierre.set_date(hoy)
+
+    nodo_var.set('')
+    entidad_var.set('')
+    trabajador_var.set('')
+    hora_var.set('')
+    tecnico_var.set('')
+    servicio_var.set('')
+    actividades_var.set('')
+    mantenimiento_var.set('')
+    imagenes.clear()
+    lbl_fotos.config(text="0 foto(s) seleccionada(s)")
+
+def mostrar_creditos():
+    ventana_creditos = tk.Toplevel(root)
+    ventana_creditos.title("Créditos")
+    ventana_creditos.geometry("400x200")
+    ventana_creditos.configure(bg="#f2f2f2")
+    
+    texto_creditos = (
+        "Generador de Reportes CINERGIA\n"
+        "Desarrollado por: Javier Yepez Ramírez\n"
+        "Universidad de Guanajuato - DICIS\n"
+        "2025\n"
+        "\n"
+        "Gracias por usar esta aplicación."
+    )
+    
+    lbl_creditos = ttk.Label(ventana_creditos, text=texto_creditos, justify="center", background="#f2f2f2", font=("Segoe UI", 11))
+    lbl_creditos.pack(expand=True, padx=20, pady=20)
+    
+    btn_cerrar = ttk.Button(ventana_creditos, text="Cerrar", command=ventana_creditos.destroy)
+    btn_cerrar.pack(pady=(0, 2))
+
+# --- INTERFAZ ---
+
+# Configuración de la ventana principal
 root.title("Generador de Reportes CINERGIA")
+root.configure(bg="#f2f2f2")
+root.geometry("900x650")
 
-# Nodo
-tk.Label(root, text="Selecciona un nodo:", font=("Arial", 12)).pack(pady=5)
-combo = ttk.Combobox(root, values=nombres_nodo, width=60)
-combo.pack(pady=5)
+# Estilo ttk para modernizar la apariencia
+style = ttk.Style(root)
+style.theme_use('clam')
+style.configure("TLabel", background="#f2f2f2", font=("Segoe UI", 10))
+style.configure("TCombobox", font=("Segoe UI", 10))
+style.configure("TEntry", font=("Segoe UI", 10))
+style.configure("TButton", font=("Segoe UI", 11, "bold"), padding=6)
+style.map("TButton",
+          foreground=[('active', 'white')],
+          background=[('active', '#2ecc71')])
 
-# Fechas
-tk.Label(root, text="Fecha de emisión del reporte:").pack()
-fecha_emision = DateEntry(root, width=20)
-fecha_emision.pack()
+main_frame = ttk.Frame(root, padding=20)
+main_frame.pack(fill="both", expand=True)
 
-tk.Label(root, text="Fecha de apertura:").pack()
-fecha_apertura = DateEntry(root, width=20)
-fecha_apertura.pack()
+# Título
+titulo = ttk.Label(main_frame, text="Generador de Reportes CINERGIA", font=("Segoe UI", 20, "bold"))
+titulo.grid(row=0, column=0, columnspan=4, pady=(0, 20))
 
-tk.Label(root, text="Fecha de llegada al sitio:").pack()
-fecha_llegada = DateEntry(root, width=20)
-fecha_llegada.pack()
-
-tk.Label(root, text="Fecha de cierre:").pack()
-fecha_cierre = DateEntry(root, width=20)
-fecha_cierre.pack()
-
-# Trabajador
-tk.Label(root, text="Selecciona al trabajador:").pack()
+# Variables
+nodo_var = tk.StringVar()
 trabajador_var = tk.StringVar()
-trabajadores = ["Carlos Pérez", "María López", "Luis Sánchez", "Otro"]
-combo_trabajador = ttk.Combobox(root, textvariable=trabajador_var, values=trabajadores, width=40)
-combo_trabajador.pack()
-
-# Hora
-tk.Label(root, text="Hora (ej. 03:30 PM):").pack()
 hora_var = tk.StringVar()
-hora_entry = tk.Entry(root, textvariable=hora_var, width=20)
-hora_entry.pack()
-
-# Técnico
-tk.Label(root, text="Técnico:").pack()
 tecnico_var = tk.StringVar()
-tecnicos = ["Daniel Vázquez", "Leticia Hernández", "Javier Rojas", "Otro"]
-combo_tecnico = ttk.Combobox(root, textvariable=tecnico_var, values=tecnicos, width=40)
-combo_tecnico.pack()
-
-# Servicio y 
-tk.Label(root, text="Servicio :").pack()
+entidad_var = tk.StringVar()
 servicio_var = tk.StringVar()
-servicios = ["sevicios", "sevicios de equipo", "sevicios Revisión de red", "Otro"]
-combo_servicio = ttk.Combobox(root, textvariable=servicio_var, values=servicios, width=50)
-combo_servicio.pack()
-
-# Mantenimiento
-tk.Label(root, text="mantenimiento:").pack()
 mantenimiento_var = tk.StringVar()
-mantenimiento = ["Mantenimiento preventivo", "Instalación de equipo", "Revisión de red", "Otro"]
-combo_mantenimiento = ttk.Combobox(root, textvariable=mantenimiento_var, values=mantenimiento, width=50)
-combo_mantenimiento.pack()
-
-# Actividades realizadas
-tk.Label(root, text="Actividades realizadas:").pack()
 actividades_var = tk.StringVar()
-tk.Entry(root, textvariable=actividades_var, width=60).pack()
 
-# Subir fotos
-tk.Button(root, text="Subir fotos", command=subir_fotos).pack(pady=5)
-lbl_fotos = tk.Label(root, text="Ninguna foto seleccionada")
-lbl_fotos.pack()
+fecha_emision = DateEntry(main_frame, width=18)
+fecha_apertura = DateEntry(main_frame, width=18)
+fecha_llegada = DateEntry(main_frame, width=18)
+fecha_cierre = DateEntry(main_frame, width=18)
 
-# Botón generar
-tk.Button(root, text="Generar reporte", command=generar_reporte, bg="green", fg="white", font=("Arial", 11)).pack(pady=15)
+# Etiquetas y widgets en dos columnas
+etiquetas = [
+    ("Selecciona un nodo:", ttk.Combobox(main_frame, textvariable=nodo_var, values=nombres_nodo, width=40)),
+    ("Fecha de emisión:", fecha_emision),
+    ("Fecha de apertura:", fecha_apertura),
+    ("Fecha de llegada al sitio:", fecha_llegada),
+    ("Fecha de cierre:", fecha_cierre),
+    ("Trabajador:", ttk.Combobox(main_frame, textvariable=trabajador_var, values=["Servicio Preventivo", "Juan Manuel Manríquez Sarabia", "Ricardo Garcidueñas Vargas", "Otro"], width=30)),
+    ("Hora:", ttk.Combobox(main_frame, textvariable=hora_var, values=[f"{h:02}:{m} {p}" for h in range(1, 13) for m in ("00", "30") for p in ("AM", "PM")], width=20)),
+    ("Área de técnico:", ttk.Combobox(main_frame, textvariable=tecnico_var, values=["Jardín", "Kiosco", "Presidencia ", "Dirección ", "Patio ", "Aula ", "Biblioteca"], width=30)),
+    ("Entidad:", ttk.Combobox(main_frame, textvariable=entidad_var, values=["Publico", "Preescolar", "Primaria", "Telesecundaria", "SABES", "UVEG"], width=30)),
+    ("Tipo de servicio:", ttk.Combobox(main_frame, textvariable=servicio_var, values=["Servicio Preventivo", "Servicio Correctivo"], width=40)),
+    ("Tipo de mantenimiento:", ttk.Combobox(main_frame, textvariable=mantenimiento_var, values=["Mantenimiento Preventivo", "Mantenimiento Correctivo"], width=40)),
+    ("Actividades realizadas:", tk.Entry(main_frame, textvariable=actividades_var, width=50)),
+]
+
+for i, (texto, widget) in enumerate(etiquetas):
+    lbl = ttk.Label(main_frame, text=texto)
+    lbl.grid(row=i+1, column=0, sticky="w", pady=6, padx=5)
+    widget.grid(row=i+1, column=1, sticky="w", pady=6)
+
+# Botón para subir fotos
+btn_subir_fotos = ttk.Button(main_frame, text="Subir fotos", command=subir_fotos)
+btn_subir_fotos.grid(row=len(etiquetas)+1, column=0, sticky="w", pady=12, padx=5)
+
+lbl_fotos = ttk.Label(main_frame, text="0 foto(s) seleccionada(s)")
+lbl_fotos.grid(row=len(etiquetas)+1, column=1, sticky="w")
+
+# Botones Generar reporte y Créditos
+btn_generar = ttk.Button(main_frame, text="Generar reporte", command=generar_reporte)
+btn_generar.grid(row=len(etiquetas)+2, column=0, pady=20, padx=5)
+
+btn_creditos = ttk.Button(root, text="?", width=3, command=mostrar_creditos, style="TButton")
+btn_creditos.place(relx=0.98, rely=0.02, anchor="ne")
+
+# Inicializar fechas con hoy
+limpiar_campos()
 
 root.mainloop()
