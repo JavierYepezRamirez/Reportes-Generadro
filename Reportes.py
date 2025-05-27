@@ -8,36 +8,32 @@ from tkcalendar import DateEntry
 from openpyxl import load_workbook
 from docx import Document
 from docx.shared import Inches
+import json
 
-# Configuración de la ventana principal y del icono
 root = tk.Tk()
 
-# Definir base_path para el icono y otros archivos según si está en modo PyInstaller o no
-if hasattr(sys, '_MEIPASS'):
-    base_path = sys._MEIPASS
+icon_path = os.path.join(os.path.dirname(__file__), 'icono.ico')
+print(f"Ruta del icono: {icon_path}")
+
+if os.path.exists(icon_path):
+    try:
+        root.iconbitmap(icon_path)
+    except Exception as e:
+        print(f"No se pudo cargar el icono: {e}")
 else:
-    base_path = os.path.abspath(".")
+    print("El archivo icono.ico no fue encontrado.")
 
-icon_path = os.path.join(base_path, 'icono.ico')
-
-try:
-    root.iconbitmap(icon_path)
-except Exception as e:
-    print(f"No se pudo cargar el icono: {e}")
-
-# Función auxiliar para obtener rutas seguras (por PyInstaller)
 def get_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.abspath("."), relative_path)
 
-# Rutas para archivos
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 excel_path = os.path.join(BASE_DIR, "NODOS.xlsx")
 reporte_origen = os.path.join(BASE_DIR, "REPORTE CINERIA.docx")
-reporte_destino = os.path.join(BASE_DIR, "temp_reporte.docx")  # Lo usas para copia temporal
+reporte_destino = os.path.join(BASE_DIR, "temp_reporte.docx") 
+actividades_path = os.path.join(BASE_DIR, "actividades.json")
 
-# Cargar datos desde Excel
 wb = load_workbook(excel_path)
 ws = wb.active
 
@@ -60,8 +56,7 @@ for row in ws.iter_rows(min_row=2, values_only=True):
 nombres_nodo = [c["nombre_nodo"] for c in clientes_data]
 imagenes = []
 
-# Funciones
-
+# --- Funciones --- 
 def subir_fotos():
     archivos = filedialog.askopenfilenames(filetypes=[("Imágenes", "*.jpg *.jpeg *.png")])
     if archivos:
@@ -117,7 +112,9 @@ def generar_reporte():
         "Hora": hora_var.get(),
         "Tecnico": tecnico_var.get(),
         "Servicio1": servicio_var.get(),
-        "actividades": actividades_var.get(),
+        "act": '\n'.join(
+            listbox_actividades.get(i) for i in listbox_actividades.curselection()
+        ) or "",
         "Mantenimiento1": mantenimiento_var.get(),
     }
 
@@ -159,7 +156,7 @@ def limpiar_campos():
     hora_var.set('')
     tecnico_var.set('')
     servicio_var.set('')
-    actividades_var.set('')
+    nueva_actividad_var.set("")
     mantenimiento_var.set('')
     imagenes.clear()
     lbl_fotos.config(text="0 foto(s) seleccionada(s)")
@@ -176,7 +173,7 @@ def mostrar_creditos():
         "Universidad de Guanajuato - DICIS\n"
         "2025\n"
         "\n"
-        "Gracias por usar esta aplicación."
+        "¡Gracias por usar esta aplicación!"
     )
     
     lbl_creditos = ttk.Label(ventana_creditos, text=texto_creditos, justify="center", background="#f2f2f2", font=("Segoe UI", 11))
@@ -185,14 +182,24 @@ def mostrar_creditos():
     btn_cerrar = ttk.Button(ventana_creditos, text="Cerrar", command=ventana_creditos.destroy)
     btn_cerrar.pack(pady=(0, 2))
 
-# --- INTERFAZ ---
+def agregar_actividad():
+    valor_entrada = entry_nueva_actividad.get().strip()
+    if valor_entrada and valor_entrada not in listbox_actividades.get(0, "end"):
+        listbox_actividades.insert("end", valor_entrada)
+        actividades_lista.append(valor_entrada)
+        with open(actividades_path, "w", encoding="utf-8") as f:
+            json.dump(actividades_lista, f, ensure_ascii=False, indent=2)
+        nueva_actividad_var.set("")
+    elif not valor_entrada:
+        messagebox.showwarning("Campo vacío", "Escribe una actividad para agregarla.")
+    else:
+        messagebox.showinfo("Duplicado", "La actividad ya está en la lista.")
 
-# Configuración de la ventana principal
+# --- INTERFAZ ---
 root.title("Generador de Reportes CINERGIA")
 root.configure(bg="#f2f2f2")
-root.geometry("900x650")
+root.geometry("950x700")
 
-# Estilo ttk para modernizar la apariencia
 style = ttk.Style(root)
 style.theme_use('clam')
 style.configure("TLabel", background="#f2f2f2", font=("Segoe UI", 10))
@@ -206,11 +213,12 @@ style.map("TButton",
 main_frame = ttk.Frame(root, padding=20)
 main_frame.pack(fill="both", expand=True)
 
-# Título
 titulo = ttk.Label(main_frame, text="Generador de Reportes CINERGIA", font=("Segoe UI", 20, "bold"))
-titulo.grid(row=0, column=0, columnspan=4, pady=(0, 20))
+titulo.grid(row=0, column=0, columnspan=2, pady=(0, 20))
 
-# Variables
+main_frame.columnconfigure(0, weight=1, uniform="col")
+main_frame.columnconfigure(1, weight=2, uniform="col")
+
 nodo_var = tk.StringVar()
 trabajador_var = tk.StringVar()
 hora_var = tk.StringVar()
@@ -218,14 +226,20 @@ tecnico_var = tk.StringVar()
 entidad_var = tk.StringVar()
 servicio_var = tk.StringVar()
 mantenimiento_var = tk.StringVar()
-actividades_var = tk.StringVar()
+nueva_actividad_var = tk.StringVar()
 
 fecha_emision = DateEntry(main_frame, width=18)
 fecha_apertura = DateEntry(main_frame, width=18)
 fecha_llegada = DateEntry(main_frame, width=18)
 fecha_cierre = DateEntry(main_frame, width=18)
 
-# Etiquetas y widgets en dos columnas
+# Cargar actividades guardadas
+if os.path.exists(actividades_path):
+    with open(actividades_path, "r", encoding="utf-8") as f:
+        actividades_lista = json.load(f)
+else:
+    actividades_lista = []
+
 etiquetas = [
     ("Selecciona un nodo:", ttk.Combobox(main_frame, textvariable=nodo_var, values=nombres_nodo, width=40)),
     ("Fecha de emisión:", fecha_emision),
@@ -237,30 +251,51 @@ etiquetas = [
     ("Área de técnico:", ttk.Combobox(main_frame, textvariable=tecnico_var, values=["Jardín", "Kiosco", "Presidencia ", "Dirección ", "Patio ", "Aula ", "Biblioteca"], width=30)),
     ("Entidad:", ttk.Combobox(main_frame, textvariable=entidad_var, values=["Publico", "Preescolar", "Primaria", "Telesecundaria", "SABES", "UVEG"], width=30)),
     ("Tipo de servicio:", ttk.Combobox(main_frame, textvariable=servicio_var, values=["Servicio Preventivo", "Servicio Correctivo"], width=40)),
-    ("Tipo de mantenimiento:", ttk.Combobox(main_frame, textvariable=mantenimiento_var, values=["Mantenimiento Preventivo", "Mantenimiento Correctivo"], width=40)),
-    ("Actividades realizadas:", tk.Entry(main_frame, textvariable=actividades_var, width=50)),
+    ("Tipo de mantenimiento:", ttk.Combobox(main_frame, textvariable=mantenimiento_var, values=["Mantenimiento Preventivo", "Mantenimiento Correctivo"], width=40))
 ]
 
 for i, (texto, widget) in enumerate(etiquetas):
     lbl = ttk.Label(main_frame, text=texto)
-    lbl.grid(row=i+1, column=0, sticky="w", pady=6, padx=5)
-    widget.grid(row=i+1, column=1, sticky="w", pady=6)
+    lbl.grid(row=i + 1, column=0, sticky="e", pady=4, padx=5)
+    widget.grid(row=i + 1, column=1, sticky="ew", pady=4)
+    
+# Actividades
+fila_actividades = len(etiquetas) + 1
+lbl_actividades = ttk.Label(main_frame, text="Actividades realizadas:")
+lbl_actividades.grid(row=fila_actividades, column=0, sticky="ne", pady=(10, 0), padx=5)
 
-# Botón para subir fotos
+listbox_actividades = tk.Listbox(main_frame, selectmode="multiple", height=6, width=45, exportselection=False)
+for act in actividades_lista:
+    listbox_actividades.insert("end", act)
+listbox_actividades.grid(row=fila_actividades, column=1, sticky="w", pady=(10, 0))
+
+# Agregar actividad
+fila_entrada = fila_actividades + 1
+entry_nueva_actividad = ttk.Entry(main_frame, textvariable=nueva_actividad_var, width=30)
+entry_nueva_actividad.grid(row=fila_entrada, column=1, sticky="w", pady=(4, 0), padx=(0, 100))
+
+btn_agregar_actividad = ttk.Button(main_frame, text="Agregar actividad", command=lambda: agregar_actividad())
+btn_agregar_actividad.grid(row=fila_entrada, column=1, sticky="e", pady=(4, 0))
+
+# Botón subir fotos y etiqueta
+fila_fotos = fila_entrada + 1
 btn_subir_fotos = ttk.Button(main_frame, text="Subir fotos", command=subir_fotos)
-btn_subir_fotos.grid(row=len(etiquetas)+1, column=0, sticky="w", pady=12, padx=5)
+btn_subir_fotos.grid(row=fila_fotos, column=0, sticky="w", pady=12, padx=5)
 
 lbl_fotos = ttk.Label(main_frame, text="0 foto(s) seleccionada(s)")
-lbl_fotos.grid(row=len(etiquetas)+1, column=1, sticky="w")
+lbl_fotos.grid(row=fila_fotos, column=1, sticky="w")
 
-# Botones Generar reporte y Créditos
+# Botón generar
+fila_generar = fila_fotos + 1
 btn_generar = ttk.Button(main_frame, text="Generar reporte", command=generar_reporte)
-btn_generar.grid(row=len(etiquetas)+2, column=0, pady=20, padx=5)
+btn_generar.grid(row=fila_generar, column=0, pady=20, padx=5, sticky="w")
 
+# Botón créditos
 btn_creditos = ttk.Button(root, text="?", width=3, command=mostrar_creditos, style="TButton")
 btn_creditos.place(relx=0.98, rely=0.02, anchor="ne")
 
-# Inicializar fechas con hoy
 limpiar_campos()
 
 root.mainloop()
+
+#pyinstaller --noconfirm --onefile --windowed --add-data "icono.ico;." --add-data "actividades.json;." --add-data "NODOS.xlsx;." --add-data "REPORTE CINERIA.docx;." --icon=icono.ico --distpath "D:\Reportes" Reportes.py
