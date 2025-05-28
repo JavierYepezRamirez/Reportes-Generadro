@@ -66,11 +66,15 @@ def subir_fotos():
 
 def reemplazar_texto(doc, buscar, reemplazo):
     reemplazo = str(reemplazo)
+    
+    # Reemplazo en párrafos normales
     for p in doc.paragraphs:
         if buscar in p.text:
             for run in p.runs:
                 if run.text and buscar in run.text:
                     run.text = run.text.replace(buscar, reemplazo)
+    
+    # Reemplazo en tablas
     for tabla in doc.tables:
         for fila in tabla.rows:
             for celda in fila.cells:
@@ -79,6 +83,15 @@ def reemplazar_texto(doc, buscar, reemplazo):
                         for run in p.runs:
                             if run.text and buscar in run.text:
                                 run.text = run.text.replace(buscar, reemplazo)
+
+    # Reemplazo en encabezado (header)
+    for section in doc.sections:
+        header = section.header
+        for p in header.paragraphs:
+            if buscar in p.text:
+                for run in p.runs:
+                    if run.text and buscar in run.text:
+                        run.text = run.text.replace(buscar, reemplazo)
 
 def generar_reporte():
     seleccionado = nodo_var.get()
@@ -113,7 +126,7 @@ def generar_reporte():
         "Tecnico": tecnico_var.get(),
         "Servicio1": servicio_var.get(),
         "act": '\n'.join(
-            listbox_actividades.get(i) for i in listbox_actividades.curselection()
+            listbox_actividades.get(i) for i in orden_seleccion_actividades
         ) or "",
         "Mantenimiento1": mantenimiento_var.get(),
     }
@@ -160,6 +173,8 @@ def limpiar_campos():
     mantenimiento_var.set('')
     imagenes.clear()
     lbl_fotos.config(text="0 foto(s) seleccionada(s)")
+    orden_seleccion_actividades.clear()
+
 
 def mostrar_creditos():
     ventana_creditos = tk.Toplevel(root)
@@ -195,6 +210,48 @@ def agregar_actividad():
     else:
         messagebox.showinfo("Duplicado", "La actividad ya está en la lista.")
 
+class AutocompleteCombobox(ttk.Combobox):
+    def set_completion_list(self, completion_list):
+        self._completion_list = sorted(completion_list, key=str.lower)
+        self['values'] = self._completion_list
+        self.bind('<KeyRelease>', self.handle_keyrelease)
+
+    def handle_keyrelease(self, event):
+        if event.keysym in ("Up", "Down", "Return", "Escape"):
+            # Solo abrir desplegable si usuario presiona flecha abajo
+            if event.keysym == "Down":
+                self.event_generate('<Down>')
+            return
+
+        typed = self.get().lower()
+        if typed == "":
+            filtered = self._completion_list
+        else:
+            filtered = [item for item in self._completion_list if typed in item.lower()]
+
+        self['values'] = filtered
+
+        # Mantener el texto que el usuario escribió
+        current_text = self.get()
+        self.delete(0, tk.END)
+        self.insert(0, current_text)
+
+
+def actualizar_orden_seleccion(event):
+    seleccion_actual = listbox_actividades.curselection()
+    for i in seleccion_actual:
+        if i not in orden_seleccion_actividades:
+            orden_seleccion_actividades.append(i)
+
+    # Elimina los índices que ya no están seleccionados
+    for i in orden_seleccion_actividades[:]:
+        if i not in seleccion_actual:
+            orden_seleccion_actividades.remove(i)
+
+        
+orden_seleccion_actividades = []
+
+
 # --- INTERFAZ ---
 root.title("Generador de Reportes CINERGIA")
 root.configure(bg="#f2f2f2")
@@ -228,10 +285,10 @@ servicio_var = tk.StringVar()
 mantenimiento_var = tk.StringVar()
 nueva_actividad_var = tk.StringVar()
 
-fecha_emision = DateEntry(main_frame, width=18)
-fecha_apertura = DateEntry(main_frame, width=18)
-fecha_llegada = DateEntry(main_frame, width=18)
-fecha_cierre = DateEntry(main_frame, width=18)
+fecha_emision = DateEntry(main_frame, width=18, date_pattern="dd/mm/yyyy")
+fecha_apertura = DateEntry(main_frame, width=18, date_pattern="dd/mm/yyyy")
+fecha_llegada = DateEntry(main_frame, width=18, date_pattern="dd/mm/yyyy")
+fecha_cierre = DateEntry(main_frame, width=18, date_pattern="dd/mm/yyyy")
 
 # Cargar actividades guardadas
 if os.path.exists(actividades_path):
@@ -240,13 +297,21 @@ if os.path.exists(actividades_path):
 else:
     actividades_lista = []
 
+    # Asegúrate que nombres_nodo no contenga None
+nombres_nodo_filtrados = [n for n in nombres_nodo if n is not None]
+
+# Crea el combobox autocompletable
+combo_nodo = AutocompleteCombobox(main_frame, textvariable=nodo_var, width=40)
+combo_nodo.set_completion_list(nombres_nodo_filtrados)
+
+
 etiquetas = [
-    ("Selecciona un nodo:", ttk.Combobox(main_frame, textvariable=nodo_var, values=nombres_nodo, width=40)),
+   ("Selecciona un nodo:", combo_nodo),
     ("Fecha de emisión:", fecha_emision),
     ("Fecha de apertura:", fecha_apertura),
     ("Fecha de llegada al sitio:", fecha_llegada),
     ("Fecha de cierre:", fecha_cierre),
-    ("Trabajador:", ttk.Combobox(main_frame, textvariable=trabajador_var, values=["Servicio Preventivo", "Juan Manuel Manríquez Sarabia", "Ricardo Garcidueñas Vargas", "Otro"], width=30)),
+    ("Trabajador:", ttk.Combobox(main_frame, textvariable=trabajador_var, values=["Jaime López Horta", "Juan Manuel Manríquez Sarabia", "Ricardo Garcidueñas Vargas", "Otro"], width=30)),
     ("Hora:", ttk.Combobox(main_frame, textvariable=hora_var, values=[f"{h:02}:{m} {p}" for h in range(1, 13) for m in ("00", "30") for p in ("AM", "PM")], width=20)),
     ("Área de técnico:", ttk.Combobox(main_frame, textvariable=tecnico_var, values=["Jardín", "Kiosco", "Presidencia ", "Dirección ", "Patio ", "Aula ", "Biblioteca"], width=30)),
     ("Entidad:", ttk.Combobox(main_frame, textvariable=entidad_var, values=["Publico", "Preescolar", "Primaria", "Telesecundaria", "SABES", "UVEG"], width=30)),
@@ -276,6 +341,8 @@ entry_nueva_actividad.grid(row=fila_entrada, column=1, sticky="w", pady=(4, 0), 
 
 btn_agregar_actividad = ttk.Button(main_frame, text="Agregar actividad", command=lambda: agregar_actividad())
 btn_agregar_actividad.grid(row=fila_entrada, column=1, sticky="e", pady=(4, 0))
+
+listbox_actividades.bind('<<ListboxSelect>>', actualizar_orden_seleccion)
 
 # Botón subir fotos y etiqueta
 fila_fotos = fila_entrada + 1
