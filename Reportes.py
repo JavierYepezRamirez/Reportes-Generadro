@@ -5,7 +5,7 @@
 # la cules deben de estar en un json llamado "actividades.json", el programa permite 
 # que el usuario pueda seleccionar fotos guardadas en su equipo y pueda ver cuales son
 # mostrando una vista previa y la eliminsacion de las imagenes que no se necesiten
-# @Version 1.0 
+# @Version 1.1 
 # 25/06/2025
 # By: Javier Yepez Ramirez
 
