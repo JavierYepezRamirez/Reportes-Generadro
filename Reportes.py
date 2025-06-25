@@ -1,3 +1,14 @@
+# Generador de resporte 
+# Funciona unicamente con "Reportes CINERGIA" y "NODOS"
+# Es un programa que hace una copia del Word original y edita los campos seleccionado,
+# tambien permite agregar actividades mas de las que ya estan asignadas por defecto,
+# la cules deben de estar en un json llamado "actividades.json", el programa permite 
+# que el usuario pueda seleccionar fotos guardadas en su equipo y pueda ver cuales son
+# mostrando una vista previa y la eliminsacion de las imagenes que no se necesiten
+# @Version 1.0 
+# 25/06/2025
+# By: Javier Yepez Ramirez
+
 import os
 import sys
 import shutil
@@ -9,9 +20,11 @@ from openpyxl import load_workbook
 from docx import Document
 from docx.shared import Inches
 import json
+from PIL import Image, ImageTk
 
 root = tk.Tk()
 
+# Ruta al icono
 icon_path = os.path.join(os.path.dirname(__file__), 'icono.ico')
 print(f"Ruta del icono: {icon_path}")
 
@@ -23,19 +36,24 @@ if os.path.exists(icon_path):
 else:
     print("El archivo icono.ico no fue encontrado.")
 
+# Función para recursos empaquetados con PyInstaller
 def get_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.abspath("."), relative_path)
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-excel_path = os.path.join(BASE_DIR, "NODOS.xlsx")
-reporte_origen = os.path.join(BASE_DIR, "REPORTE CINERIA.docx")
-reporte_destino = os.path.join(BASE_DIR, "temp_reporte.docx") 
-actividades_path = os.path.join(BASE_DIR, "actividades.json")
+# Archivos empaquetados
+reporte_origen = get_path("REPORTE CINERIA.docx")
+actividades_path = get_path("actividades.json")
 
+# Archivos externos (NO empaquetados)
+excel_path = os.path.join(os.getcwd(), "NODOS.xlsx")
+reporte_destino = os.path.join(os.getcwd(), "temp_reporte.docx")
+
+# Abrir Excel
 wb = load_workbook(excel_path)
 ws = wb.active
+
 
 clientes_data = []
 for row in ws.iter_rows(min_row=2, values_only=True):
@@ -47,8 +65,8 @@ for row in ws.iter_rows(min_row=2, values_only=True):
         "nombre_sitio": row[3],
         "tipo_espacio": row[4],
         "entidad": row[6],
-        "latitud": row[15],
-        "longitud": row[14],
+        "latitud": row[14],
+        "longitud": row[15],
         "clave_nodo": row[16],
         "nomenclatura_redgto": row[2]
     })
@@ -57,13 +75,6 @@ nombres_nodo = [c["nombre_nodo"] for c in clientes_data]
 imagenes = []
 
 # --- Funciones --- 
-def subir_fotos():
-    archivos = filedialog.askopenfilenames(filetypes=[("Imágenes", "*.jpg *.jpeg *.png")])
-    if archivos:
-        imagenes.clear()
-        imagenes.extend(archivos)
-        lbl_fotos.config(text=f"{len(imagenes)} foto(s) seleccionada(s)")
-
 def reemplazar_texto(doc, buscar, reemplazo):
     reemplazo = str(reemplazo)
     
@@ -247,19 +258,58 @@ def actualizar_orden_seleccion(event):
     for i in orden_seleccion_actividades[:]:
         if i not in seleccion_actual:
             orden_seleccion_actividades.remove(i)
+            
+def mostrar_miniaturas():
+    # Limpiar el frame
+    for widget in frame_miniaturas.winfo_children():
+        widget.destroy()
 
+    thumbnails.clear()
+    for idx, ruta in enumerate(imagenes):
+        try:
+            img = Image.open(ruta)
+            img.thumbnail((80, 80))
+            img_tk = ImageTk.PhotoImage(img)
+            thumbnails.append(img_tk)  # guardar referencia para evitar recolección
+
+            marco = tk.Frame(frame_miniaturas, bd=1, relief="raised")
+            marco.grid(row=0, column=idx, padx=4)
+
+            lbl_img = tk.Label(marco, image=img_tk)
+            lbl_img.pack()
+
+            btn_x = tk.Button(marco, text="X", command=lambda i=idx: eliminar_imagen(i), bg="#e74c3c", fg="white")
+            btn_x.pack(fill="x")
+
+        except Exception as e:
+            print(f"Error al cargar imagen: {ruta}", e)
+
+def eliminar_imagen(indice):
+    if 0 <= indice < len(imagenes):
+        del imagenes[indice]
+        lbl_fotos.config(text=f"{len(imagenes)} foto(s) seleccionada(s)")
+        mostrar_miniaturas()
+
+def subir_fotos():
+    archivos = filedialog.askopenfilenames(filetypes=[("Imágenes", "*.jpg *.jpeg *.png")])
+    if archivos:
+        imagenes.extend(archivos)
+        lbl_fotos.config(text=f"{len(imagenes)} foto(s) seleccionada(s)")
+        mostrar_miniaturas()
         
+#Variables globales
 orden_seleccion_actividades = []
-
+imagenes = []  
+thumbnails = [] 
 
 # --- INTERFAZ ---
 root.title("Generador de Reportes CINERGIA")
-root.configure(bg="#f2f2f2")
+root.configure(bg="#ffffff")
 root.geometry("950x700")
 
 style = ttk.Style(root)
 style.theme_use('clam')
-style.configure("TLabel", background="#f2f2f2", font=("Segoe UI", 10))
+style.configure("TLabel", background="#ffffff", font=("Segoe UI", 10))
 style.configure("TCombobox", font=("Segoe UI", 10))
 style.configure("TEntry", font=("Segoe UI", 10))
 style.configure("TButton", font=("Segoe UI", 11, "bold"), padding=6)
@@ -267,13 +317,36 @@ style.map("TButton",
           foreground=[('active', 'white')],
           background=[('active', '#2ecc71')])
 
-main_frame = ttk.Frame(root, padding=20)
-main_frame.pack(fill="both", expand=True)
+# Scrollable main_frame dentro de un canvas
+frame_canvas = ttk.Frame(root)
+frame_canvas.pack(fill="both", expand=True)
+
+canvas = tk.Canvas(frame_canvas, bg="#ffffff", highlightthickness=0)
+scroll_y = ttk.Scrollbar(frame_canvas, orient="vertical", command=canvas.yview)
+canvas.configure(yscrollcommand=scroll_y.set)
+
+scroll_y.pack(side="right", fill="y")
+canvas.pack(side="left", fill="both", expand=True)
+
+# Frame interno desplazable
+scrollable_frame = ttk.Frame(canvas)
+canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+
+def _on_mousewheel(event):
+    canvas.yview_scroll(int(-12 * (event.delta / 120)), "units")
+
+def _on_configure(event):
+    canvas.configure(scrollregion=canvas.bbox("all"))
+
+scrollable_frame.bind("<Configure>", _on_configure)
+canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+main_frame = scrollable_frame
 
 titulo = ttk.Label(main_frame, text="Generador de Reportes CINERGIA", font=("Segoe UI", 20, "bold"))
-titulo.grid(row=0, column=0, columnspan=2, pady=(0, 20))
+titulo.grid(row=0, column=0, columnspan=1, pady=(0, 20))
 
-main_frame.columnconfigure(0, weight=1, uniform="col")
+main_frame.columnconfigure(100, weight=100, uniform="col")
 main_frame.columnconfigure(1, weight=2, uniform="col")
 
 nodo_var = tk.StringVar()
@@ -352,8 +425,11 @@ btn_subir_fotos.grid(row=fila_fotos, column=0, sticky="w", pady=12, padx=5)
 lbl_fotos = ttk.Label(main_frame, text="0 foto(s) seleccionada(s)")
 lbl_fotos.grid(row=fila_fotos, column=1, sticky="w")
 
+frame_miniaturas = ttk.Frame(main_frame)
+frame_miniaturas.grid(row=fila_fotos + 1, column=0, columnspan=2, pady=(5, 0), sticky="ew")
+
 # Botón generar
-fila_generar = fila_fotos + 1
+fila_generar = fila_fotos + 3
 btn_generar = ttk.Button(main_frame, text="Generar reporte", command=generar_reporte)
 btn_generar.grid(row=fila_generar, column=0, pady=20, padx=5, sticky="w")
 
@@ -365,4 +441,4 @@ limpiar_campos()
 
 root.mainloop()
 
-#pyinstaller --noconfirm --onefile --windowed --add-data "icono.ico;." --add-data "actividades.json;." --add-data "NODOS.xlsx;." --add-data "REPORTE CINERIA.docx;." --icon=icono.ico --distpath "D:\Reportes" Reportes.py
+#pyinstaller --noconfirm --onefile --windowed --add-data "icono.ico;." --add-data "actividades.json;." --add-data "REPORTE CINERIA.docx;." --icon=icono.ico --distpath "D:\Reportes" Reportes.py
