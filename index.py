@@ -1,3 +1,10 @@
+# Sistema de licencias
+# Permite que una como putadora tenga acceso por medio del ID de la maquina 
+# si no tiene hacesso no la dejara, pero si si pasara al Reportes.py
+# @Version 1.0 
+# 25/06/2025
+# By: Javier Yepez Ramirez
+
 import os
 import firebase_admin
 from firebase_admin import credentials, firestore
