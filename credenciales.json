@@ -1,8 +1,20 @@
 {
-  "usuario1": {
-    "password": "1234"
+  "jaime.lopez": {
+    "password": "lopez123"
+  },
+  "juan.manriquez": {
+    "password": "manriquez123"
+  },
+  "ricardo.garciduenas": {
+    "password": "garciduenas123"
+  },
+  "martha.prieto": {
+    "password": "prieto123"
+  },
+  "ivan.hernandez": {
+    "password": "hernandez123"
   },
   "admin": {
-    "password": "adminpass"
+    "password": "admin123"
   }
 }

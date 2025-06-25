@@ -5,7 +5,7 @@
 # la cules deben de estar en un json llamado "actividades.json", el programa permite 
 # que el usuario pueda seleccionar fotos guardadas en su equipo y pueda ver cuales son
 # mostrando una vista previa y la eliminsacion de las imagenes que no se necesiten
-# @Version 1.1 
+# @Version 1.0 
 # 25/06/2025
 # By: Javier Yepez Ramirez
 
@@ -439,6 +439,11 @@ btn_creditos.place(relx=0.98, rely=0.02, anchor="ne")
 
 limpiar_campos()
 
-root.mainloop()
+def main():
+    root.mainloop()
+
+if __name__ == "__main__":
+    main()
+
 
 #pyinstaller --noconfirm --onefile --windowed --add-data "icono.ico;." --add-data "actividades.json;." --add-data "REPORTE CINERIA.docx;." --icon=icono.ico --distpath "D:\Reportes" Reportes.py
