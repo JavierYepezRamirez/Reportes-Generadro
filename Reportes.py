@@ -5,8 +5,7 @@
 # la cuales deben de estar en un json llamado "actividades.json", el programa permite 
 # que el usuario pueda seleccionar fotos guardadas en su equipo y pueda ver cuales son
 # mostrando una vista previa y la eliminsacion de las imagenes que no se necesiten
-# @Version 1.1 Mejorado de vista, problemas con el scroll solucionados, 
-# problemas las miniaturas se agregan cada 3, mejorado de mostrado de horas, pantalla completa y inplementacion de logo.
+# @Version 1.2 Mejora de actividades, implementacion a la base de datos
 # 26/06/2025
 # By: Javier Yepez Ramirez
 
@@ -14,7 +13,7 @@
 #   - Fondo
 
 # Forma de enpaquetado
-# pyinstaller --noconfirm --onefile --windowed --add-data "icono.ico;." --add-data "actividades.json;." --add-data "REPORTE CINERIA.docx;." --icon=icono.ico --distpath "D:\Reportes" Reportes.py
+# pyinstaller --noconfirm --onefile --windowed --add-data "icono.ico;." --add-data "logo.png;." --add-data "REPORTE CINERIA.docx;." --icon=icono.ico --distpath "C:\Users\javie\Desktop\Reportes" Reportes.py
 
 import os
 import sys
@@ -28,6 +27,13 @@ from docx import Document
 from docx.shared import Inches
 import json
 from PIL import Image, ImageTk
+import requests
+
+#Variables globales
+orden_seleccion_actividades = []
+imagenes = []  
+thumbnails = [] 
+clientes_data = []
 
 root = tk.Tk()
 
@@ -51,9 +57,45 @@ def get_path(relative_path):
 
 # Archivos empaquetados
 reporte_origen = get_path("REPORTE CINERIA.docx")
-actividades_path = get_path("actividades.json")
 logo_path = get_path("logo.png")
 fondo_path = get_path("fondo.png")
+
+import requests
+from tkinter import messagebox
+
+def cargar_actividades_desde_firebase():
+    try:
+        url = "https://generadorreportes-dae9e-default-rtdb.firebaseio.com/.json"
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            if isinstance(data, dict):
+                try:
+                    lista = [data[str(i)] for i in range(len(data))]
+                    return lista
+                except KeyError:
+                    messagebox.showerror("Error", "Datos en Firebase mal estructurados.")
+                    return []
+            elif isinstance(data, list):
+                return data
+            else:
+                messagebox.showerror("Error", "El formato de datos en Firebase no es válido.")
+                return []
+        else:
+            messagebox.showerror("Error", f"No se pudo acceder a Firebase: {response.status_code}")
+            return []
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al conectarse a Firebase:\n{e}")
+        return []
+
+def guardar_actividades_en_firebase(lista_actividades):
+    try:
+        url = "https://generadorreportes-dae9e-default-rtdb.firebaseio.com/.json"
+        response = requests.put(url, json=lista_actividades)
+        if response.status_code != 200:
+            messagebox.showerror("Error", f"No se pudo guardar en Firebase: {response.status_code}")
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al guardar en Firebase:\n{e}")
 
 # Archivos externos (NO empaquetados)
 excel_path = os.path.join(os.getcwd(), "NODOS.xlsx")
@@ -63,8 +105,6 @@ reporte_destino = os.path.join(os.getcwd(), "temp_reporte.docx")
 wb = load_workbook(excel_path)
 ws = wb.active
 
-
-clientes_data = []
 for row in ws.iter_rows(min_row=2, values_only=True):
     clientes_data.append({
         "nombre_nodo": row[3],
@@ -81,7 +121,6 @@ for row in ws.iter_rows(min_row=2, values_only=True):
     })
 
 nombres_nodo = [c["nombre_nodo"] for c in clientes_data]
-imagenes = []
 
 # --- Funciones --- 
 def reemplazar_texto(doc, buscar, reemplazo):
@@ -183,18 +222,32 @@ def limpiar_campos():
     fecha_llegada.set_date(hoy)
     fecha_cierre.set_date(hoy)
 
+    # Limpiar variables StringVar
     nodo_var.set('')
     entidad_var.set('')
     trabajador_var.set('')
     hora_var.set('')
     tecnico_var.set('')
     servicio_var.set('')
-    nueva_actividad_var.set("")
+    nueva_actividad_var.set('')
     mantenimiento_var.set('')
-    imagenes.clear()
-    lbl_fotos.config(text="0 foto(s) seleccionada(s)")
+
+    # Limpiar Listbox actividades (quitar selección y opcionalmente vaciar)
+    listbox_actividades.selection_clear(0, tk.END)
+
+    # Limpiar orden de selección de actividades
     orden_seleccion_actividades.clear()
 
+    # Limpiar imágenes y miniaturas
+    imagenes.clear()
+    thumbnails.clear()
+
+    # Actualizar texto de fotos
+    lbl_fotos.config(text="0 foto(s) seleccionada(s)")
+
+    # Limpiar miniaturas visibles (frame_miniaturas)
+    for widget in frame_miniaturas.winfo_children():
+        widget.destroy()
 
 def mostrar_creditos():
     ventana_creditos = tk.Toplevel(root)
@@ -222,8 +275,7 @@ def agregar_actividad():
     if valor_entrada and valor_entrada not in listbox_actividades.get(0, "end"):
         listbox_actividades.insert("end", valor_entrada)
         actividades_lista.append(valor_entrada)
-        with open(actividades_path, "w", encoding="utf-8") as f:
-            json.dump(actividades_lista, f, ensure_ascii=False, indent=2)
+        guardar_actividades_en_firebase(actividades_lista)
         nueva_actividad_var.set("")
     elif not valor_entrada:
         messagebox.showwarning("Campo vacío", "Escribe una actividad para agregarla.")
@@ -306,10 +358,6 @@ def subir_fotos():
         lbl_fotos.config(text=f"{len(imagenes)} foto(s) seleccionada(s)")
         mostrar_miniaturas()
 
-#Variables globales
-orden_seleccion_actividades = []
-imagenes = []  
-thumbnails = [] 
 
 # --- INTERFAZ ---
 root.title("Generador de Reportes CINERGIA")
@@ -386,12 +434,7 @@ fecha_apertura = DateEntry(main_frame, width=18, date_pattern="dd/mm/yyyy")
 fecha_llegada = DateEntry(main_frame, width=18, date_pattern="dd/mm/yyyy")
 fecha_cierre = DateEntry(main_frame, width=18, date_pattern="dd/mm/yyyy")
 
-# Cargar actividades guardadas
-if os.path.exists(actividades_path):
-    with open(actividades_path, "r", encoding="utf-8") as f:
-        actividades_lista = json.load(f)
-else:
-    actividades_lista = []
+actividades_lista = cargar_actividades_desde_firebase()
 
     # Asegúrate que nombres_nodo no contenga None
 nombres_nodo_filtrados = [n for n in nombres_nodo if n is not None]

@@ -5,7 +5,7 @@ a = Analysis(
     ['Reportes.py'],
     pathex=[],
     binaries=[],
-    datas=[('icono.ico', '.'), ('actividades.json', '.'), ('REPORTE CINERIA.docx', '.')],
+    datas=[('icono.ico', '.'), ('logo.png', '.'), ('REPORTE CINERIA.docx', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
