@@ -5,7 +5,7 @@ a = Analysis(
     ['index.py'],
     pathex=[],
     binaries=[],
-    datas=[('icono.ico', '.'), ('actividades.json', '.'), ('REPORTE CINERIA.docx', '.'), ('firebase_key.json', '.')],
+    datas=[('icono.ico', '.'), ('logo.png', '.'), ('actividades.json', '.'), ('REPORTE CINERIA.docx', '.'), ('firebase_key.json', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
